@@ -2,7 +2,7 @@
   "name": "interactiveposter",
   "version": "1.0.0",
   "description": "An interactive poster built with p5.js that uses machine vision to detect movement and respond with animated animals and visual effects.  \r The project explores real-time interaction and motion-based storytelling for large public displays.",
-  "main": "display.js",
+  "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js"
