@@ -1,10 +1,15 @@
 let socket;
 let tiles = [];
+let order = []; 
+
+const POSTER_W = 400;
+const POSTER_H = 600;
+const SHUFFLE_INTERVAL_FRAMES = 100; 
 
 function setup() {
   createCanvas(windowWidth, windowHeight);
   background(0);
-  imageMode(CENTER);
+  imageMode(CORNER);
 
   socket = io();
   socket.on("connect", () => {
@@ -24,23 +29,8 @@ function setup() {
 
 function addPosterTile(dataUrl) {
   loadImage(dataUrl, (img) => {
-
-    const maxW = windowWidth * 0.35;   
-    const maxH = windowHeight * 0.35;  
-
-    const scaleFactor = min(maxW / img.width, maxH / img.height);
-    const scale = scaleFactor * random(0.7, 1.0);
-
-    const w = img.width * scale;
-    const h = img.height * scale;
-
-    const margin = 30;
-
-    const x = random(margin + w/2, width - margin - w/2);
-    const y = random(margin + h/2, height - margin - h/2);
-
-    tiles.push({ img, x, y, w, h });
-
+    tiles.push({ img });
+    rebuildOrder();
   });
 }
 
@@ -55,9 +45,64 @@ function draw() {
     return;
   }
 
-  for (const t of tiles) {
-    if (!t.img) continue;
-    image(t.img, t.x, t.y, t.w, t.h);
+  if (order.length !== tiles.length) {
+    rebuildOrder();
+  }
+
+  if (frameCount % SHUFFLE_INTERVAL_FRAMES === 0 && tiles.length > 1) {
+    shuffleArray(order);
+  }
+
+  const n = tiles.length;
+  const { cols, posterW, posterH } = computeLayout(n);
+
+  for (let i = 0; i < n; i++) {
+    const tileIndex = order[i];
+    const t = tiles[tileIndex];
+    if (!t || !t.img) continue;
+
+    const col = i % cols;
+    const row = floor(i / cols);
+    const x = col * posterW;
+    const y = row * posterH;
+
+    image(t.img, x, y, posterW, posterH);
+  }
+}
+
+function computeLayout(n) {
+  let bestCols = 1;
+  let bestScale = 0;
+
+  for (let cols = 1; cols <= n; cols++) {
+    const rows = ceil(n / cols);
+    const maxW = width / cols;
+    const maxH = height / rows;
+    const scale = min(maxW / POSTER_W, maxH / POSTER_H);
+
+    if (scale > bestScale) {
+      bestScale = scale;
+      bestCols = cols;
+    }
+  }
+
+  const posterW = POSTER_W * bestScale;
+  const posterH = POSTER_H * bestScale;
+  return { cols: bestCols, posterW, posterH };
+}
+
+function rebuildOrder() {
+  order = [];
+  for (let i = 0; i < tiles.length; i++) {
+    order.push(i);
+  }
+  shuffleArray(order);
+}
+
+function shuffleArray(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = floor(random(i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
   }
 }
 
