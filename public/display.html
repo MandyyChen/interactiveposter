@@ -9,9 +9,42 @@
       background: #000;
       overflow: hidden;
     }
+
+    #toggleMode,
+    #clearWall {
+      position: fixed;
+      z-index: 10;
+      padding: 8px 14px;
+      border-radius: 999px;
+      border: none;
+      font-size: 12px;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      cursor: pointer;
+      background: rgba(255, 255, 255, 0.14);
+      color: #fff;
+      backdrop-filter: blur(6px);
+    }
+
+    #toggleMode {
+      top: 12px;
+      right: 12px;
+    }
+
+    #clearWall {
+      top: 12px;
+      left: 12px;
+    }
+
+    #toggleMode:hover,
+    #clearWall:hover {
+      background: rgba(255, 255, 255, 0.26);
+    }
   </style>
 </head>
 <body>
+  <button id="clearWall">Clear wall</button>
+  <button id="toggleMode">Strokes view</button>
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <script src="display.js"></script>

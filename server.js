@@ -6,18 +6,21 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-
 app.use(express.static("public"));
-
-const posters = []; 
+const posters = [];
 
 io.on("connection", (socket) => {
   console.log("user connected:", socket.id);
 
   socket.emit("initPosters", posters);
 
-  socket.on("newPoster", (dataUrl) => {
-    const poster = { dataUrl, ts: Date.now() };
+  socket.on("newPoster", (p) => {
+    const poster = {
+      dataUrl: p.dataUrl,
+      strokes: p.strokes || [],
+      ts: Date.now()
+    };
+
     posters.push(poster);
 
     if (posters.length > 300) posters.shift();

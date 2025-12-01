@@ -2,73 +2,135 @@ let symmetry = 5;
 let angle = 360 / symmetry;
 let sizeSlider, clearButton;
 let fontsize = 20;
-let saveButton;
-let socket; 
+let saveButton, sendButton;
+let socket;
 let cnv;
-//how to make more r
-//test video/gif
 
 const COLORS = [
-  [249, 215, 28],  // yellow
-  [217, 80, 126],  // pink
-  [237, 91, 41],  // orange
-  [0, 224, 241]   // blue
+  [253, 239, 20],
+  [177, 235, 0],
+  [74, 168, 219],
+  [255, 133, 203]
 ];
 
-let mode = "single";   
+const BRUSH_COLORS = [
+  [255, 255, 255],
+  [253, 239, 20],
+  [177, 235, 0],
+  [74, 168, 219],
+  [255, 133, 203]
+];
+
+let currentBrushColor = BRUSH_COLORS[0];
+
+let mode = "single";
 let colorIndex = 0;
 let waveSeed = 12345;
 
-let rows = 4;            // number of wave layers
-let waveMaxHeight = 150; // vertical range of a single wave
-let baseT = 0;           // time parameter for animation
+let rows = 4;
+let waveMaxHeight = 150;
+let baseT = 0;
 
 let strokesLayer;
+let strokeEvents = [];
+
+const BASE_W = 400;
+const BASE_H = 600;
+
+function calcCanvasSize() {
+  const margin = 32;
+  const controlsH = 160;
+
+  const maxW = Math.min(BASE_W, windowWidth - margin * 2);
+  const maxH = Math.min(BASE_H, windowHeight - margin * 2 - controlsH);
+
+  const scale = Math.min(maxW / BASE_W, maxH / BASE_H, 1);
+
+  return {
+    w: BASE_W * scale,
+    h: BASE_H * scale
+  };
+}
 
 function setup() {
-  cnv = createCanvas(400, 600);
+  const size = calcCanvasSize();
+  cnv = createCanvas(size.w, size.h);
+
+  const canvasWrapper = select('#canvas-wrapper');
+  if (canvasWrapper) cnv.parent(canvasWrapper);
+
   angleMode(DEGREES);
 
   socket = io();
   socket.on("connect", () => {
-  console.log("Maker socket connected:", socket.id);
+    console.log("Maker socket connected:", socket.id);
   });
 
   strokesLayer = createGraphics(width, height);
   strokesLayer.angleMode(DEGREES);
   strokesLayer.noFill();
-  strokesLayer.stroke(255);
   strokesLayer.strokeCap(ROUND);
   strokesLayer.strokeJoin(ROUND);
 
   textSize(fontsize);
   textAlign(CENTER, CENTER);
 
-  clearButton = createButton('clear / randomize');
+  const controls = select('#controls') || createDiv().id('controls');
+
+  clearButton = createButton('Clear');
+  clearButton.parent(controls);
   clearButton.mousePressed(clearAndRandomize);
 
-  createSpan(' ');
-  createSpan('Brush Size ');
+  const label = createSpan('Brush');
+  label.parent(controls);
+  label.addClass('label');
+
   sizeSlider = createSlider(1, 32, 4, 1);
+  sizeSlider.parent(controls);
+
+  const colorLabel = createSpan('Ink');
+  colorLabel.parent(controls);
+  colorLabel.addClass('label');
+
+  const colorRow = createDiv();
+  colorRow.parent(controls);
+  colorRow.addClass('color-row');
+
+  BRUSH_COLORS.forEach(c => {
+    const swatch = createSpan(' ');
+    swatch.parent(colorRow);
+    swatch.addClass('swatch');
+    swatch.style('background-color', `rgb(${c[0]}, ${c[1]}, ${c[2]})`);
+    swatch.mousePressed(() => {
+      currentBrushColor = c;
+    });
+  });
+
+  saveButton = createButton('Save PNG');
+  saveButton.parent(controls);
+  saveButton.addClass('secondary');
+  saveButton.mousePressed(savePosterLocally);
+
+  sendButton = createButton('Send to wall');
+  sendButton.parent(controls);
+  sendButton.mousePressed(sendPosterToWall);
 
   randomizeMode();
   drawBackground();
-  saveButton = createButton('save png');
-  saveButton.mousePressed(savePoster);
 }
 
 function draw() {
-  drawBackground(); 
-  
+  drawBackground();
+
   if (mode === "waves") baseT += 0.01;
-  
+
   image(strokesLayer, 0, 0);
 
   push();
   resetMatrix();
   drawWords();
   pop();
-  
+
   if (isPointerDown() &&
       mouseX >= 0 && mouseX < width &&
       mouseY >= 0 && mouseY < height) {
@@ -76,11 +138,25 @@ function draw() {
   }
 }
 
+function windowResized() {
+  const size = calcCanvasSize();
+  resizeCanvas(size.w, size.h);
+
+  const newLayer = createGraphics(width, height);
+  newLayer.angleMode(DEGREES);
+  newLayer.noFill();
+  newLayer.strokeCap(ROUND);
+  newLayer.strokeJoin(ROUND);
+  strokesLayer = newLayer;
+
+  drawBackground();
+}
+
 function drawSymBrush(g) {
   g.push();
   g.translate(width / 2, height / 2);
 
-  g.stroke(255);
+  g.stroke(...currentBrushColor);
   g.strokeWeight(sizeSlider.value());
 
   let mx  = mouseX  - width / 2;
@@ -97,6 +173,15 @@ function drawSymBrush(g) {
     g.pop();
   }
   g.pop();
+
+  strokeEvents.push({
+    mx,
+    my,
+    pmx,
+    pmy,
+    color: [...currentBrushColor],
+    weight: sizeSlider.value()
+  });
 }
 
 function touchMoved() {
@@ -109,6 +194,7 @@ function isPointerDown() {
 
 function clearAndRandomize() {
   strokesLayer.clear();
+  strokeEvents = [];
   randomizeMode();
   drawBackground();
 }
@@ -148,10 +234,9 @@ function drawQuads() {
   fill(...COLORS[3]); rect(w, h, w, h);
 }
 
-// wave credit code: pippinbarr
 function drawWaves(number) {
-  let overlap = waveMaxHeight * 0.4; 
-  let totalHeight = height + waveMaxHeight; 
+  let overlap = waveMaxHeight * 0.4;
+  let totalHeight = height + waveMaxHeight;
   let spacing = (totalHeight + overlap) / number;
 
   for (let i = number - 1; i >= 0; i--) {
@@ -181,12 +266,10 @@ function drawWave(n, totalRows, spacing, overlap) {
   endShape(CLOSE);
 }
 
-function savePoster() {
-  console.log("Save button clicked");
-
+function buildFilenamePrefix() {
   const ts = new Date();
   const pad = n => String(n).padStart(2, '0');
-  const fname = [
+  return [
     'YDesign',
     ts.getFullYear(),
     pad(ts.getMonth() + 1),
@@ -195,49 +278,43 @@ function savePoster() {
     pad(ts.getMinutes()),
     pad(ts.getSeconds())
   ].join('_');
+}
 
-  // local download
+function savePosterLocally() {
+  const fname = buildFilenamePrefix();
   saveCanvas(fname, 'png');
-
-  // send to wall
-  if (cnv && socket && socket.connected) {
-    const dataUrl = cnv.elt.toDataURL("image/png");
-    console.log("Emitting newPoster to server");
-    socket.emit("newPoster", dataUrl);
-  } else {
-    console.log("Socket not connected or canvas missing", { cnv, socket });
-  }
 }
 
-// shortcut
+function sendPosterToWall() {
+  if (!cnv || !socket || !socket.connected) return;
+  const dataUrl = cnv.elt.toDataURL("image/png");
+  socket.emit("newPoster", {
+    dataUrl,
+    strokes: strokeEvents
+  });
+}
+
 function keyPressed() {
-  if (key === 's' || key === 'S') savePoster();
+  if (key === 's' || key === 'S') savePosterLocally();
 }
 
-
-// text
-
- function drawWords() {
+function drawWords() {
   push();
   noStroke();
   fill(20);
 
-
-  let s = 1.3; 
+  let s = 1.3;
 
   textAlign(LEFT, TOP);
-
 
   textStyle(BOLD);
   textSize(18 * s);
   text('YDesign', 18, 20);
 
-
   textStyle(NORMAL);
   textSize(10 * s);
   text('Yale’s Inaugural Design', 20, 43);
   text('Conference & Designathon', 20, 57);
-
 
   textAlign(RIGHT, TOP);
   textStyle(BOLD);
@@ -247,7 +324,6 @@ function keyPressed() {
   textStyle(NORMAL);
   textSize(10 * s);
   text('Hosted at Tsai CITY', width - 20, 43);
-
 
   textAlign(RIGHT, BOTTOM);
   textStyle(BOLD);
